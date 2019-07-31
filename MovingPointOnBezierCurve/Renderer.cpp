@@ -90,10 +90,6 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
          Lights.toggleLightSwitch();
          cout << "Light Turned " << (Lights.isLightOn() ? "On!" : "Off!") << endl;
          break;
-      case GLFW_KEY_P:
-         cout << "Camera Position: " << 
-            MainCamera.CamPos.x << ", " << MainCamera.CamPos.y << ", " << MainCamera.CamPos.z << endl;
-         break;
       case GLFW_KEY_Q:
       case GLFW_KEY_ESCAPE:
          cleanupWrapper( window );
@@ -110,17 +106,18 @@ void RendererGL::keyboardWrapper(GLFWwindow* window, int key, int scancode, int 
 
 void RendererGL::cursor(GLFWwindow* window, double xpos, double ypos)
 {
-   if (MainCamera.getMovingState()) {
-      const auto x = static_cast<int>(round( xpos ));
-      const auto y = static_cast<int>(round( ypos ));
-      const int dx = x - ClickedPoint.x;
-      const int dy = y - ClickedPoint.y;
+   const auto x = static_cast<int>(round( xpos ));
+   const auto y = static_cast<int>(round( ypos ));
+   const int dx = x - ClickedPoint.x;
+   const int dy = y - ClickedPoint.y;
 
-      
-
-      ClickedPoint.x = x;
-      ClickedPoint.y = y;
+   if (x >= 1280) {
+      glfwSetCursor( window, glfwCreateStandardCursor( GLFW_CROSSHAIR_CURSOR ) );
    }
+   else glfwSetCursor( window, nullptr );
+
+   ClickedPoint.x = x;
+   ClickedPoint.y = y;
 }
 
 void RendererGL::cursorWrapper(GLFWwindow* window, double xpos, double ypos)
@@ -138,7 +135,6 @@ void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
          ClickedPoint.x = static_cast<int>(round( x ));
          ClickedPoint.y = static_cast<int>(round( y ));
       }
-      MainCamera.setMovingState( moving_state );
    }
 }
 
@@ -150,10 +146,10 @@ void RendererGL::mouseWrapper(GLFWwindow* window, int button, int action, int mo
 void RendererGL::mousewheel(GLFWwindow* window, double xoffset, double yoffset)
 {
    if (yoffset >= 0.0) {
-      MainCamera.zoomIn();
+      
    }
    else {
-      MainCamera.zoomOut();
+      
    }
 }
 
@@ -221,6 +217,7 @@ void RendererGL::setAxisObject()
       { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } 
    };
    AxisObject.setObject( GL_LINES, axis_vertices );
+   AxisObject.setDiffuseReflectionColor( { 0.93f, 0.92f, 0.91f, 1.0f } ); 
 }
 
 void RendererGL::setTeapotObject()
@@ -233,7 +230,7 @@ void RendererGL::setTeapotObject()
    //TeapotObject.setObject( GL_TRIANGLES, teapot_vertices, teapot_normals );
 }
 
-void RendererGL::drawAxisObject(const float& scale_factor)
+void RendererGL::drawAxisObject()
 {
    const bool origin_light_status = Lights.isLightOn();
    if (origin_light_status) Lights.toggleLightSwitch();
@@ -241,34 +238,25 @@ void RendererGL::drawAxisObject(const float& scale_factor)
    glUseProgram( ObjectShader.ShaderProgram );
    glLineWidth( 5.0f );
 
-   mat4 to_world = mat4(1.0f);
-   const mat4 scale_matrix = scale( mat4(1.0f), vec3(scale_factor) );
-   mat4 model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * scale_matrix * to_world;
+   const mat4 scale_matrix = scale( mat4(1.0f), vec3(1600.0f, 800.0f, 1.0f) );
+   const mat4 translation = translate( mat4(1.0f), vec3(150.0f, 100.0f, 0.0f) );
+   mat4 to_world = translation * scale_matrix;
+   mat4 model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * to_world;
    glUniformMatrix4fv( ObjectShader.Location.World, 1, GL_FALSE, &to_world[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.View, 1, GL_FALSE, &MainCamera.ViewMatrix[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.Projection, 1, GL_FALSE, &MainCamera.ProjectionMatrix[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.ModelViewProjection, 1, GL_FALSE, &model_view_projection[0][0] );
-   AxisObject.setDiffuseReflectionColor( { 1.0f, 0.0f, 0.0f, 1.0f } ); 
    AxisObject.transferUniformsToShader( ObjectShader );
    Lights.transferUniformsToShader( ObjectShader );
 
    glBindVertexArray( AxisObject.ObjVAO );
    glDrawArrays( AxisObject.DrawMode, 0, AxisObject.VerticesCount );
 
-   to_world = glm::rotate( mat4(1.0f), radians( 90.0f ), vec3(0.0f, 0.0f, 1.0f) );
-   model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * scale_matrix * to_world;
+   const mat4 rotation = glm::rotate( mat4(1.0f), radians( 90.0f ), vec3(0.0f, 0.0f, 1.0f) );
+   to_world = to_world * rotation;
+   model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * to_world;
    glUniformMatrix4fv( ObjectShader.Location.World, 1, GL_FALSE, &to_world[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.ModelViewProjection, 1, GL_FALSE, &model_view_projection[0][0] );
-   AxisObject.setDiffuseReflectionColor( { 0.0f, 1.0f, 0.0f, 1.0f } ); 
-   AxisObject.transferUniformsToShader( ObjectShader );
-
-   glDrawArrays( AxisObject.DrawMode, 0, AxisObject.VerticesCount );
-
-   to_world = glm::rotate( mat4(1.0f), radians( -90.0f ), vec3(0.0f, 1.0f, 0.0f) );
-   model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * scale_matrix * to_world;
-   glUniformMatrix4fv( ObjectShader.Location.World, 1, GL_FALSE, &to_world[0][0] );
-   glUniformMatrix4fv( ObjectShader.Location.ModelViewProjection, 1, GL_FALSE, &model_view_projection[0][0] );
-   AxisObject.setDiffuseReflectionColor( { 0.0f, 0.0f, 1.0f, 1.0f } ); 
    AxisObject.transferUniformsToShader( ObjectShader );
 
    glDrawArrays( AxisObject.DrawMode, 0, AxisObject.VerticesCount );
@@ -294,33 +282,44 @@ void RendererGL::drawTeapotObject(const mat4& to_world)
    glDrawArrays( TeapotObject.DrawMode, 0, TeapotObject.VerticesCount );
 }
 
+void RendererGL::drawMainCurve()
+{
+   glViewport( 0, 0, 1280, 1080 );
+   glClearColor( 0.72f, 0.72f, 0.77f, 1.0f );
+   glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+   drawAxisObject();
+}
+
 void RendererGL::drawPositionCurve()
 {
    glEnable( GL_SCISSOR_TEST );
    glViewport( 1280, 540, 640, 540 );
    glScissor( 1280, 540, 640, 540 );
-   glClearColor( 0.37f, 0.23f, 0.72f, 1.0f );
+   glClearColor( 0.63f, 0.53f, 0.49f, 1.0f );
    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
+   drawAxisObject();
 
+   glDisable( GL_SCISSOR_TEST );
 }
 
 void RendererGL::drawVelocityCurve()
 {
+   glEnable( GL_SCISSOR_TEST );
    glViewport( 1280, 0, 640, 540 );
    glScissor( 1280, 0, 640, 540 );
-   glClearColor( 0.89f, 0.63f, 0.1f, 1.0f );
+   glClearColor( 0.55f, 0.43f, 0.38f, 1.0f );
    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+   
+   drawAxisObject();
+
    glDisable( GL_SCISSOR_TEST );
-
-
 }
 
 void RendererGL::render()
 {
-   glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
-   glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-   
+   drawMainCurve();
    drawPositionCurve();
    drawVelocityCurve();
 

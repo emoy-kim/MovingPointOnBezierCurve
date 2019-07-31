@@ -50,8 +50,9 @@ class RendererGL
    void setLights();
    void setAxisObject();
    void setTeapotObject();
-   void drawAxisObject(const float& scale_factor = 1.0f);
+   void drawAxisObject();
    void drawTeapotObject(const mat4& to_world);
+   void drawMainCurve();
    void drawPositionCurve();
    void drawVelocityCurve();
    void update();
