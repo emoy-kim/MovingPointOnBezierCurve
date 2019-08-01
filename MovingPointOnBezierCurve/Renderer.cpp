@@ -70,9 +70,13 @@ void RendererGL::cleanup(GLFWwindow* window)
    glDeleteVertexArrays( 1, &AxisObject.ObjVAO );
    glDeleteVertexArrays( 1, &PositionObject.ObjVAO );
    glDeleteVertexArrays( 1, &VelocityObject.ObjVAO );
+   glDeleteVertexArrays( 1, &PositionCurveObject.ObjVAO );
+   glDeleteVertexArrays( 1, &VelocityCurveObject.ObjVAO );
    glDeleteBuffers( 1, &AxisObject.ObjVBO );
    glDeleteBuffers( 1, &PositionObject.ObjVBO );
    glDeleteBuffers( 1, &VelocityObject.ObjVBO );
+   glDeleteBuffers( 1, &PositionCurveObject.ObjVBO );
+   glDeleteBuffers( 1, &VelocityCurveObject.ObjVBO );
 
    glfwSetWindowShouldClose( window, GLFW_TRUE );
 }
@@ -90,23 +94,23 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
       case GLFW_KEY_P:
          PositionMode = true;
          VelocityMode = false;
-         cout << "Select 4 points for the position function." << endl;
+         cout << "Select 4 points for the position curve." << endl;
          break;
       case GLFW_KEY_V:
          PositionMode = false;
          VelocityMode = true;
-         cout << "Select 2 points for the velocity function." << endl;
+         cout << "Select 2 points for the velocity curve." << endl;
          break;
       case GLFW_KEY_C:
          if (PositionMode) {
             PositionMode = false;
             PositionControlPoints.clear();
-            cout << "Clear the position function." << endl;
+            cout << "Clear the position curve." << endl;
          }
          if (VelocityMode) {
             VelocityMode = false;
             VelocityControlPoints.clear();
-            cout << "Clear the velocity function." << endl;
+            cout << "Clear the velocity curve." << endl;
          }
          break;
       case GLFW_KEY_Q:
@@ -125,10 +129,7 @@ void RendererGL::keyboardWrapper(GLFWwindow* window, int key, int scancode, int 
 
 void RendererGL::cursor(GLFWwindow* window, double xpos, double ypos)
 {
-   const auto x = static_cast<int>(round( xpos ));
-   const auto y = static_cast<int>(round( ypos ));
-
-   if (1280 <= x) {
+   if (1280.0f <= static_cast<float>(xpos)) {
       glfwSetCursor( window, glfwCreateStandardCursor( GLFW_CROSSHAIR_CURSOR ) );
    }
    else glfwSetCursor( window, nullptr );
@@ -150,8 +151,15 @@ void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
       if (PositionMode && PositionControlPoints.size() <= 3 && 1280.0f <= x && y <= 540.0f) {
          PositionControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (540.0f - y) * 2.0f, 0.0f );
       }
-      else if (VelocityMode && VelocityControlPoints.size() <= 1 && 1280.0f <= x && 540.0f < y) {
-         VelocityControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (1080.0f - y) * 2.0f, 0.0f );
+      else if (VelocityMode && VelocityControlPoints.size() <= 3 && 1280.0f <= x && 540.0f < y) {
+         if (VelocityControlPoints.empty()) {
+            VelocityControlPoints.emplace_back( 150.0f, 100.0f, 0.0f );
+            VelocityControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (1080.0f - y) * 2.0f, 0.0f );
+         }
+         else {
+            VelocityControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (1080.0f - y) * 2.0f, 0.0f );
+            VelocityControlPoints.emplace_back( 1750.0f, 900.0f, 0.0f );
+         }
       }
    }
 }
@@ -159,21 +167,6 @@ void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
 void RendererGL::mouseWrapper(GLFWwindow* window, int button, int action, int mods)
 {
    Renderer->mouse( window, button, action, mods );
-}
-
-void RendererGL::mousewheel(GLFWwindow* window, double xoffset, double yoffset)
-{
-   if (yoffset >= 0.0) {
-      
-   }
-   else {
-      
-   }
-}
-
-void RendererGL::mousewheelWrapper(GLFWwindow* window, double xoffset, double yoffset)
-{
-   Renderer->mousewheel( window, xoffset, yoffset );
 }
 
 void RendererGL::reshape(GLFWwindow* window, int width, int height)
@@ -194,7 +187,6 @@ void RendererGL::registerCallbacks() const
    glfwSetKeyCallback( Window, keyboardWrapper );
    glfwSetCursorPosCallback( Window, cursorWrapper );
    glfwSetMouseButtonCallback( Window, mouseWrapper );
-   glfwSetScrollCallback( Window, mousewheelWrapper );
    glfwSetFramebufferSizeCallback( Window, reshapeWrapper );
 }
 
@@ -221,6 +213,14 @@ void RendererGL::setCurveObjects()
    if (VelocityObject.ObjVAO != 0) {
       glDeleteVertexArrays( 1, &VelocityObject.ObjVAO );
       glDeleteBuffers( 1, &VelocityObject.ObjVBO );
+   }
+   if (PositionCurveObject.ObjVAO != 0) {
+      glDeleteVertexArrays( 1, &PositionCurveObject.ObjVAO );
+      glDeleteBuffers( 1, &PositionCurveObject.ObjVBO );
+   }
+   if (VelocityCurveObject.ObjVAO != 0) {
+      glDeleteVertexArrays( 1, &VelocityCurveObject.ObjVAO );
+      glDeleteBuffers( 1, &VelocityCurveObject.ObjVBO );
    }
 
    PositionObject.setObject( GL_LINE_STRIP, {} );
@@ -299,7 +299,9 @@ void RendererGL::drawPositionCurve()
 
    drawAxisObject();
 
-   PositionObject.updateDataBuffer( PositionControlPoints );
+   if (PositionControlPoints.size() <= 4) {
+      PositionObject.updateDataBuffer( PositionControlPoints );
+   }
    drawControlPoints( PositionObject );
 
    glDisable( GL_SCISSOR_TEST );
@@ -315,7 +317,9 @@ void RendererGL::drawVelocityCurve()
    
    drawAxisObject();
 
-   VelocityObject.updateDataBuffer( VelocityControlPoints );
+   if (VelocityControlPoints.size() <= 4) {
+      VelocityObject.updateDataBuffer( VelocityControlPoints );
+   }
    drawControlPoints( VelocityObject );
 
    glDisable( GL_SCISSOR_TEST );

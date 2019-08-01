@@ -39,14 +39,12 @@ class RendererGL
    void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods);
    void cursor(GLFWwindow* window, double xpos, double ypos);
    void mouse(GLFWwindow* window, int button, int action, int mods);
-   void mousewheel(GLFWwindow* window, double xoffset, double yoffset);
    void reshape(GLFWwindow* window, int width, int height);
    static void errorWrapper(int error, const char* description);
    static void cleanupWrapper(GLFWwindow* window);
    static void keyboardWrapper(GLFWwindow* window, int key, int scancode, int action, int mods);
    static void cursorWrapper(GLFWwindow* window, double xpos, double ypos);
    static void mouseWrapper(GLFWwindow* window, int button, int action, int mods);
-   static void mousewheelWrapper(GLFWwindow* window, double xoffset, double yoffset);
    static void reshapeWrapper(GLFWwindow* window, int width, int height);
 
    void setAxisObject();
