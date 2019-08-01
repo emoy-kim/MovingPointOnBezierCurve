@@ -19,13 +19,15 @@ class RendererGL
    static RendererGL* Renderer;
    GLFWwindow* Window;
 
-   ivec2 ClickedPoint;
+   bool PositionMode, VelocityMode;
+   vector<vec3> PositionControlPoints, VelocityControlPoints;
+   vector<vec3> PositionCurve, VelocityCurve;
 
    CameraGL MainCamera;
    ShaderGL ObjectShader;
-   ObjectGL AxisObject, TeapotObject;
-
-   LightGL Lights;
+   ObjectGL AxisObject;
+   ObjectGL PositionObject, VelocityObject;
+   ObjectGL PositionCurveObject, VelocityCurveObject;
  
    void registerCallbacks() const;
    void initialize();
@@ -47,11 +49,10 @@ class RendererGL
    static void mousewheelWrapper(GLFWwindow* window, double xoffset, double yoffset);
    static void reshapeWrapper(GLFWwindow* window, int width, int height);
 
-   void setLights();
    void setAxisObject();
-   void setTeapotObject();
+   void setCurveObjects();
    void drawAxisObject();
-   void drawTeapotObject(const mat4& to_world);
+   void drawControlPoints(ObjectGL& control_points);
    void drawMainCurve();
    void drawPositionCurve();
    void drawVelocityCurve();

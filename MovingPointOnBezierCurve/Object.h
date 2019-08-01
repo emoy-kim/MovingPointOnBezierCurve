@@ -91,7 +91,6 @@ public:
    enum LayoutLocation { VertexLoc=0, NormalLoc, TextureLoc };
 
    GLuint ObjVAO, ObjVBO;
-   vector<GLuint> ShaderStorageBufferObjects;
    GLenum DrawMode;
    GLuint TextureID;
    GLsizei VerticesCount;
@@ -152,10 +151,9 @@ public:
       const Mat& texture
    );
 
-   bool readObjectFile(vector<vec3>& vertices, vector<vec3>& normals, vector<vec2>& textures, const path& file_path) const;
    void transferUniformsToShader(ShaderGL& shader);
-   void prepareShaderStorageBuffer();
-   
+   void updateDataBuffer(const vector<vec3>& data);
+
    template<typename T>
    void addBufferObject(const GLenum& target, const vector<T>& data, const GLenum& usage)
    {

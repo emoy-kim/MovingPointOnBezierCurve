@@ -1,8 +1,7 @@
 #include "Renderer.h"
 
 RendererGL* RendererGL::Renderer = nullptr;
-RendererGL::RendererGL() : 
-   Window( nullptr ), ClickedPoint( -1, -1 )
+RendererGL::RendererGL() : Window( nullptr ), PositionMode( false ), VelocityMode( false )
 {
    Renderer = this;
 
@@ -69,9 +68,11 @@ void RendererGL::cleanup(GLFWwindow* window)
 {
    glDeleteProgram( ObjectShader.ShaderProgram );
    glDeleteVertexArrays( 1, &AxisObject.ObjVAO );
-   glDeleteVertexArrays( 1, &TeapotObject.ObjVAO );
+   glDeleteVertexArrays( 1, &PositionObject.ObjVAO );
+   glDeleteVertexArrays( 1, &VelocityObject.ObjVAO );
    glDeleteBuffers( 1, &AxisObject.ObjVBO );
-   glDeleteBuffers( 1, &TeapotObject.ObjVBO );
+   glDeleteBuffers( 1, &PositionObject.ObjVBO );
+   glDeleteBuffers( 1, &VelocityObject.ObjVBO );
 
    glfwSetWindowShouldClose( window, GLFW_TRUE );
 }
@@ -86,9 +87,27 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
    if (action != GLFW_PRESS) return;
 
    switch (key) {
-      case GLFW_KEY_L:
-         Lights.toggleLightSwitch();
-         cout << "Light Turned " << (Lights.isLightOn() ? "On!" : "Off!") << endl;
+      case GLFW_KEY_P:
+         PositionMode = true;
+         VelocityMode = false;
+         cout << "Select 4 points for the position function." << endl;
+         break;
+      case GLFW_KEY_V:
+         PositionMode = false;
+         VelocityMode = true;
+         cout << "Select 2 points for the velocity function." << endl;
+         break;
+      case GLFW_KEY_C:
+         if (PositionMode) {
+            PositionMode = false;
+            PositionControlPoints.clear();
+            cout << "Clear the position function." << endl;
+         }
+         if (VelocityMode) {
+            VelocityMode = false;
+            VelocityControlPoints.clear();
+            cout << "Clear the velocity function." << endl;
+         }
          break;
       case GLFW_KEY_Q:
       case GLFW_KEY_ESCAPE:
@@ -108,16 +127,11 @@ void RendererGL::cursor(GLFWwindow* window, double xpos, double ypos)
 {
    const auto x = static_cast<int>(round( xpos ));
    const auto y = static_cast<int>(round( ypos ));
-   const int dx = x - ClickedPoint.x;
-   const int dy = y - ClickedPoint.y;
 
-   if (x >= 1280) {
+   if (1280 <= x) {
       glfwSetCursor( window, glfwCreateStandardCursor( GLFW_CROSSHAIR_CURSOR ) );
    }
    else glfwSetCursor( window, nullptr );
-
-   ClickedPoint.x = x;
-   ClickedPoint.y = y;
 }
 
 void RendererGL::cursorWrapper(GLFWwindow* window, double xpos, double ypos)
@@ -127,13 +141,17 @@ void RendererGL::cursorWrapper(GLFWwindow* window, double xpos, double ypos)
 
 void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
 {
-   if (button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT) {
-      const bool moving_state = action == GLFW_PRESS;
-      if (moving_state) {
-         double x, y;
-         glfwGetCursorPos( window, &x, &y );
-         ClickedPoint.x = static_cast<int>(round( x ));
-         ClickedPoint.y = static_cast<int>(round( y ));
+   if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+      double x_pos, y_pos;
+      glfwGetCursorPos( window, &x_pos, &y_pos );
+      const auto x = static_cast<float>(x_pos);
+      const auto y = static_cast<float>(y_pos);
+      
+      if (PositionMode && PositionControlPoints.size() <= 3 && 1280.0f <= x && y <= 540.0f) {
+         PositionControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (540.0f - y) * 2.0f, 0.0f );
+      }
+      else if (VelocityMode && VelocityControlPoints.size() <= 1 && 1280.0f <= x && 540.0f < y) {
+         VelocityControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (1080.0f - y) * 2.0f, 0.0f );
       }
    }
 }
@@ -180,32 +198,6 @@ void RendererGL::registerCallbacks() const
    glfwSetFramebufferSizeCallback( Window, reshapeWrapper );
 }
 
-void RendererGL::setLights()
-{  
-   vec4 light_position(10.0f, 150.0f, 10.0f, 1.0f);
-   vec4 ambient_color(0.9f, 0.9f, 0.9f, 1.0f);
-   vec4 diffuse_color(0.9f, 0.9f, 0.9f, 1.0f);
-   vec4 specular_color(0.9f, 0.9f, 0.9f, 1.0f);
-   Lights.addLight( light_position, ambient_color, diffuse_color, specular_color );
-
-   light_position = vec4(7.0f, 100.0f, 7.0f, 1.0f);
-   ambient_color = vec4(0.5f, 0.5f, 0.5f, 1.0f);
-   diffuse_color = vec4(0.0f, 0.47f, 0.75f, 1.0f);
-   specular_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
-   vec3 spotlight_direction(0.0f, -1.0f, 0.0f);
-   float spotlight_exponent = 128;
-   float spotlight_cutoff_angle_in_degree = 7.0f;
-   Lights.addLight( 
-      light_position, 
-      ambient_color, 
-      diffuse_color, 
-      specular_color,
-      spotlight_direction,
-      spotlight_exponent,
-      spotlight_cutoff_angle_in_degree
-   );  
-}
-
 void RendererGL::setAxisObject()
 {
    if (AxisObject.ObjVAO != 0) {
@@ -220,21 +212,26 @@ void RendererGL::setAxisObject()
    AxisObject.setDiffuseReflectionColor( { 0.93f, 0.92f, 0.91f, 1.0f } ); 
 }
 
-void RendererGL::setTeapotObject()
+void RendererGL::setCurveObjects()
 {
-   if (TeapotObject.ObjVAO != 0) {
-      glDeleteVertexArrays( 1, &TeapotObject.ObjVAO );
-      glDeleteBuffers( 1, &TeapotObject.ObjVBO );
+   if (PositionObject.ObjVAO != 0) {
+      glDeleteVertexArrays( 1, &PositionObject.ObjVAO );
+      glDeleteBuffers( 1, &PositionObject.ObjVBO );
+   }
+   if (VelocityObject.ObjVAO != 0) {
+      glDeleteVertexArrays( 1, &VelocityObject.ObjVAO );
+      glDeleteBuffers( 1, &VelocityObject.ObjVBO );
    }
 
-   //TeapotObject.setObject( GL_TRIANGLES, teapot_vertices, teapot_normals );
+   PositionObject.setObject( GL_LINE_STRIP, {} );
+   PositionObject.setDiffuseReflectionColor( { 0.9f, 0.8f, 0.1f, 1.0f } );
+
+   VelocityObject.setObject( GL_LINE_STRIP, {} );
+   VelocityObject.setDiffuseReflectionColor( { 0.9f, 0.8f, 0.1f, 1.0f } );
 }
 
 void RendererGL::drawAxisObject()
-{
-   const bool origin_light_status = Lights.isLightOn();
-   if (origin_light_status) Lights.toggleLightSwitch();
-   
+{   
    glUseProgram( ObjectShader.ShaderProgram );
    glLineWidth( 5.0f );
 
@@ -247,8 +244,7 @@ void RendererGL::drawAxisObject()
    glUniformMatrix4fv( ObjectShader.Location.Projection, 1, GL_FALSE, &MainCamera.ProjectionMatrix[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.ModelViewProjection, 1, GL_FALSE, &model_view_projection[0][0] );
    AxisObject.transferUniformsToShader( ObjectShader );
-   Lights.transferUniformsToShader( ObjectShader );
-
+   
    glBindVertexArray( AxisObject.ObjVAO );
    glDrawArrays( AxisObject.DrawMode, 0, AxisObject.VerticesCount );
 
@@ -261,25 +257,27 @@ void RendererGL::drawAxisObject()
 
    glDrawArrays( AxisObject.DrawMode, 0, AxisObject.VerticesCount );
    glLineWidth( 1.0f );
-
-   if (origin_light_status) Lights.toggleLightSwitch();
 }
 
-void RendererGL::drawTeapotObject(const mat4& to_world)
-{
+void RendererGL::drawControlPoints(ObjectGL& control_points)
+{ 
    glUseProgram( ObjectShader.ShaderProgram );
+   glLineWidth( 3.0f );
+   glPointSize( 10.0f );
 
-   const mat4 model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * to_world;
+   mat4 to_world = mat4(1.0f);
+   mat4 model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * to_world;
    glUniformMatrix4fv( ObjectShader.Location.World, 1, GL_FALSE, &to_world[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.View, 1, GL_FALSE, &MainCamera.ViewMatrix[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.Projection, 1, GL_FALSE, &MainCamera.ProjectionMatrix[0][0] );
    glUniformMatrix4fv( ObjectShader.Location.ModelViewProjection, 1, GL_FALSE, &model_view_projection[0][0] );
+   control_points.transferUniformsToShader( ObjectShader );
 
-   TeapotObject.transferUniformsToShader( ObjectShader );
-   Lights.transferUniformsToShader( ObjectShader );
-   
-   glBindVertexArray( TeapotObject.ObjVAO );
-   glDrawArrays( TeapotObject.DrawMode, 0, TeapotObject.VerticesCount );
+   glBindVertexArray( control_points.ObjVAO );
+   glDrawArrays( control_points.DrawMode, 0, control_points.VerticesCount );
+   glDrawArrays( GL_POINTS, 0, control_points.VerticesCount );
+   glLineWidth( 1.0f );
+   glPointSize( 1.0f );
 }
 
 void RendererGL::drawMainCurve()
@@ -301,6 +299,9 @@ void RendererGL::drawPositionCurve()
 
    drawAxisObject();
 
+   PositionObject.updateDataBuffer( PositionControlPoints );
+   drawControlPoints( PositionObject );
+
    glDisable( GL_SCISSOR_TEST );
 }
 
@@ -313,6 +314,9 @@ void RendererGL::drawVelocityCurve()
    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
    
    drawAxisObject();
+
+   VelocityObject.updateDataBuffer( VelocityControlPoints );
+   drawControlPoints( VelocityObject );
 
    glDisable( GL_SCISSOR_TEST );
 }
@@ -336,10 +340,9 @@ void RendererGL::play()
 {
    if (glfwWindowShouldClose( Window )) initialize();
 
-   setLights();
    setAxisObject();
-   setTeapotObject();
-   ObjectShader.setUniformLocations( Lights.TotalLightNum );
+   setCurveObjects();
+   ObjectShader.setUniformLocations( 0 );
 
    while (!glfwWindowShouldClose( Window )) {
       update();

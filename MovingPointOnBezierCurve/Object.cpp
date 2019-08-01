@@ -397,60 +397,6 @@ void ObjectGL::setObject(
    prepareTexture( n_bytes_per_vertex, texture, true );
 }
 
-bool ObjectGL::readObjectFile(vector<vec3>& vertices, vector<vec3>& normals, vector<vec2>& textures, const path& file_path) const
-{
-   ifstream file(file_path);
-   if (!file.is_open()) {
-      cout << "The object file is not correct." << endl;
-      return false;
-   }
-
-   vector<vec3> vertex_buffer, normal_buffer;
-   vector<vec2> texture_buffer;
-   vector<int> vertex_indices, normal_indices, texture_indices;
-   while (!file.eof()) {
-      string word;
-      file >> word;
-      
-      if (word == "v") {
-         vec3 vertex;
-         file >> vertex.x >> vertex.y >> vertex.z;
-         vertex_buffer.emplace_back( vertex );
-      }
-      else if (word == "vn") {
-         vec3 normal;
-         file >> normal.x >> normal.y >> normal.z;
-         normal_buffer.emplace_back( normal );
-      }
-      else if (word == "vt") {
-         vec3 uv;
-         file >> uv.x >> uv.y >> uv.z;
-         //uv.y = -uv.y;
-         texture_buffer.emplace_back( uv.x, uv.y );
-      }
-      else if (word == "f") {
-         char c;
-         vertex_indices.emplace_back(); file >> vertex_indices.back(); file >> c;
-         texture_indices.emplace_back(); file >> texture_indices.back(); file >> c;
-         normal_indices.emplace_back(); file >> normal_indices.back(); //file >> c;
-         vertex_indices.emplace_back(); file >> vertex_indices.back(); file >> c;
-         texture_indices.emplace_back(); file >> texture_indices.back(); file >> c;
-         normal_indices.emplace_back(); file >> normal_indices.back(); //file >> c;
-         vertex_indices.emplace_back(); file >> vertex_indices.back(); file >> c;
-         texture_indices.emplace_back(); file >> texture_indices.back(); file >> c;
-         normal_indices.emplace_back(); file >> normal_indices.back(); //file >> c;
-      }
-      else getline( file, word );
-   }
-
-   for (uint i = 0; i < vertex_indices.size(); ++i) {
-      vertices.emplace_back( vertex_buffer[vertex_indices[i] - 1] );
-      normals.emplace_back( normal_buffer[normal_indices[i] - 1] );
-      textures.emplace_back( texture_buffer[texture_indices[i] - 1] );
-   }
-   return true;
-}
-
 void ObjectGL::transferUniformsToShader(ShaderGL& shader)
 {
    glUniform4fv( shader.Location.MaterialEmission, 1, &EmissionColor[0] );
@@ -462,19 +408,18 @@ void ObjectGL::transferUniformsToShader(ShaderGL& shader)
    glUniform1i( shader.Location.Texture, TextureID );
 }
 
-void ObjectGL::prepareShaderStorageBuffer()
+void ObjectGL::updateDataBuffer(const vector<vec3>& data)
 {
-   ShaderStorageBufferObjects.resize( 3 );
-   glGenBuffers( 1, &ShaderStorageBufferObjects[1] );
-   glGenBuffers( 1, &ShaderStorageBufferObjects[2] );
-
-   ShaderStorageBufferObjects[0] = ObjVBO;
-   glBindBufferBase( GL_SHADER_STORAGE_BUFFER, 0, ShaderStorageBufferObjects[0] );
-   glBufferData( GL_SHADER_STORAGE_BUFFER, sizeof GLfloat * DataBuffer.size(), DataBuffer.data(), GL_DYNAMIC_DRAW );
-
-   glBindBufferBase( GL_SHADER_STORAGE_BUFFER, 1, ShaderStorageBufferObjects[1] );
-   glBufferData( GL_SHADER_STORAGE_BUFFER, sizeof GLfloat * DataBuffer.size(), DataBuffer.data(), GL_DYNAMIC_DRAW );
-   
-   glBindBufferBase( GL_SHADER_STORAGE_BUFFER, 2, ShaderStorageBufferObjects[2] );
-   glBufferData( GL_SHADER_STORAGE_BUFFER, sizeof GLfloat * DataBuffer.size(), nullptr, GL_DYNAMIC_DRAW );
+   VerticesCount = 0;
+   DataBuffer.clear();
+   for (uint i = 0; i < data.size(); ++i) {
+      DataBuffer.push_back( data[i].x );
+      DataBuffer.push_back( data[i].y );
+      DataBuffer.push_back( data[i].z );
+      VerticesCount++;
+      cout << data[i].x << " " << data[i].y << " " << data[i].z << endl;
+   }
+   glBindBuffer( GL_ARRAY_BUFFER, ObjVBO );
+   glBufferData( GL_ARRAY_BUFFER, sizeof(GLfloat) * DataBuffer.size(), DataBuffer.data(), GL_DYNAMIC_DRAW );
+   glBindBuffer( GL_ARRAY_BUFFER, 0 );
 }
