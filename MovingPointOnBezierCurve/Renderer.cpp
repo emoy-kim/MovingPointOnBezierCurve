@@ -2,8 +2,8 @@
 
 RendererGL* RendererGL::Renderer = nullptr;
 RendererGL::RendererGL() : 
-   Window( nullptr ), PositionMode( false ), VelocityMode( false ), TotalPositionCurvePointNum( 201 ),
-   TotalVelocityCurvePointNum( 101 ), TotalAnimationFrameNum( 301 )
+   Window( nullptr ), PositionMode( false ), VelocityMode( false ), MoveType( NONE ),
+   TotalPositionCurvePointNum( 201 ), TotalVelocityCurvePointNum( 101 ), TotalAnimationFrameNum( 301 )
 {
    Renderer = this;
 
@@ -74,11 +74,13 @@ void RendererGL::cleanup(GLFWwindow* window)
    glDeleteVertexArrays( 1, &VelocityObject.ObjVAO );
    glDeleteVertexArrays( 1, &PositionCurveObject.ObjVAO );
    glDeleteVertexArrays( 1, &VelocityCurveObject.ObjVAO );
+   glDeleteVertexArrays( 1, &MovingObject.ObjVAO );
    glDeleteBuffers( 1, &AxisObject.ObjVBO );
    glDeleteBuffers( 1, &PositionObject.ObjVBO );
    glDeleteBuffers( 1, &VelocityObject.ObjVBO );
    glDeleteBuffers( 1, &PositionCurveObject.ObjVBO );
    glDeleteBuffers( 1, &VelocityCurveObject.ObjVBO );
+   glDeleteBuffers( 1, &MovingObject.ObjVBO );
 
    glfwSetWindowShouldClose( window, GLFW_TRUE );
 }
@@ -133,6 +135,12 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
       case GLFW_KEY_C:
          clearCurve();
          break;
+      case GLFW_KEY_1:
+         MoveType = UNIFORM;
+         break;
+      case GLFW_KEY_2:
+         MoveType = VARIABLE;
+         break;
       case GLFW_KEY_Q:
       case GLFW_KEY_ESCAPE:
          cleanupWrapper( window );
@@ -167,8 +175,8 @@ void RendererGL::getPointOnPositionBezierCurve(vec3& point, const float& t)
    const float one_minus_t = 1.0f - t;
 
    const float b0 = one_minus_t * one_minus_t * one_minus_t / 6.0f;
-   const float b1 = (3 * t3 - 6 * t2 + 4) / 6.0f;
-   const float b2 = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6.0f;
+   const float b1 = (3.0f * t3 - 6.0f * t2 + 4.0f) / 6.0f;
+   const float b2 = (-3.0f * t3 + 3.0f * t2 + 3.0f * t + 1.0f) / 6.0f;
    const float b3 = t3 / 6.0f;
 
    point = 
@@ -176,16 +184,104 @@ void RendererGL::getPointOnPositionBezierCurve(vec3& point, const float& t)
       b2 * PositionControlPoints[2] + b3 * PositionControlPoints[3];
 }
 
+float RendererGL::getDeltaLength(const float& t)
+{
+   const float t2 = t * t;
+   const float one_minus_t = 1.0f - t;
+
+   const float b0 = -1.0f * one_minus_t * one_minus_t / 2.0f;
+   const float b1 = (3.0f * t2 - 4.0f * t) / 2.0f;
+   const float b2 = (-3.0f * t2 + 2.0f * t + 1.0f) / 2.0f;
+   const float b3 = t2 / 2.0f;
+   
+   const vec3 derivative =
+      b0 * PositionControlPoints[0] + b1 * PositionControlPoints[1] + 
+      b2 * PositionControlPoints[2] + b3 * PositionControlPoints[3];
+   return length( derivative );
+}
+
+float RendererGL::getCurveLengthFromZeroTo(const float& t)
+{
+   const int n = 6;
+   const float h = t / static_cast<float>(n);
+   float sum1 = 0.0f, sum2 = 0.0f;
+   for (int i = 1; i < n; i += 2) {
+      sum1 += getDeltaLength( static_cast<float>(i) * h );
+   }
+   for (int i = 2; i < n; i += 2) {
+      sum2 += getDeltaLength( static_cast<float>(i) * h );
+   }
+   return h / 3.0f * (getDeltaLength( 0.0f ) + getDeltaLength( t ) + 4.0f * sum1 + 2.0f * sum2);
+}
+
+float RendererGL::getInverseCurveLength(const float& length) 
+{
+   const float epsilon = 0.00001f;
+   float a = 0.0f, b = 1.0f;
+   float mid;
+   int M = 20;
+
+   do {
+      mid = (a + b) / 2;
+
+      if ((getCurveLengthFromZeroTo( a ) - length) * (getCurveLengthFromZeroTo( mid ) - length) < 0.0f) b = mid;
+      else a = mid;
+      
+   } while ((abs(getCurveLengthFromZeroTo( mid ) - length) > epsilon) && (M-- > 0));
+   return (a + b) / 2;
+}
+
 void RendererGL::createPositionCurve()
 {
-   for (int i = 0; i != TotalPositionCurvePointNum; ++i) {
-      const float t = static_cast<float>(i) / static_cast<float>(TotalPositionCurvePointNum - 1);
-      getPointOnPositionBezierCurve( PositionCurve[i], t );
+   float t = 0.0f;
+   const float dt = 1.0f / static_cast<float>(TotalPositionCurvePointNum - 1);
+   for (auto& position : PositionCurve) {
+      getPointOnPositionBezierCurve( position, t );
+      t += dt;
    }
    PositionCurveObject.updateDataBuffer( PositionCurve );
 
+   float l = 0.0f;
+   const float dl = getCurveLengthFromZeroTo( 1.0f ) / static_cast<float>(TotalAnimationFrameNum - 1);
+   for (auto& uniform : UniformVelocityCurve) {
+      t = getInverseCurveLength( l );
+      getPointOnPositionBezierCurve( uniform, t );
+      l += dl;
+   }
+}
 
+void RendererGL::getPointOnVelocityBezierCurve(vec3& point, const float& t)
+{
+   const float one_minus_t = 1.0f - t;
+   const vec3 b0 = one_minus_t * VelocityControlPoints[0] + t * VelocityControlPoints[1];
+   const vec3 b1 = one_minus_t * VelocityControlPoints[1] + t * VelocityControlPoints[2];
+   const vec3 b2 = one_minus_t * VelocityControlPoints[2] + t * VelocityControlPoints[3];
+   const vec3 b3 = one_minus_t * b0 + t * b1;
+   const vec3 b4 = one_minus_t * b1 + t * b2;
+   point = one_minus_t * b3 + t * b4;
+}
 
+void RendererGL::createVelocityCurve()
+{
+   float t = 0.0f; 
+   const float dt = 1.0f / static_cast<float>(TotalVelocityCurvePointNum - 1); 
+   for (auto& velocity : VelocityCurve) {
+      getPointOnVelocityBezierCurve( velocity, t );
+      t += dt; 
+   }
+   VelocityCurveObject.updateDataBuffer( VelocityCurve );
+
+   //float l = 0.0f;
+   //const float dl = getCurveLengthFromZeroTo( 1.0f ) / static_cast<float>(TotalAnimationFrameNum - 1);
+   //for (auto& variable : VariableVelocityCurve) {
+   //   t = getInverseCurveLength( l );
+   //   getPointOnPositionBezierCurve( uniform, t );
+   //   l += dl;
+   //}
+
+   //root = D_inverse(Sy(Sx_inverse(i*S*10.0f/D(1.0f)))*D(1.0f)*0.1f);
+   //      mpath_anim_velocity[i][0] = x(root);
+   //      mpath_anim_velocity[i][1] = y(root);
 }
 
 void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
@@ -211,6 +307,9 @@ void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
          else {
             VelocityControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (1080.0f - y) * 2.0f, 0.0f );
             VelocityControlPoints.emplace_back( 1750.0f, 900.0f, 0.0f );
+
+            VelocityMode = false;
+            createVelocityCurve();
          }
       }
    }
@@ -274,6 +373,10 @@ void RendererGL::setCurveObjects()
       glDeleteVertexArrays( 1, &VelocityCurveObject.ObjVAO );
       glDeleteBuffers( 1, &VelocityCurveObject.ObjVBO );
    }
+   if (MovingObject.ObjVAO != 0) {
+      glDeleteVertexArrays( 1, &MovingObject.ObjVAO );
+      glDeleteBuffers( 1, &MovingObject.ObjVBO );
+   }
 
    PositionObject.setObject( GL_LINE_STRIP, {} );
    PositionObject.setDiffuseReflectionColor( { 0.9f, 0.8f, 0.1f, 1.0f } );
@@ -286,6 +389,9 @@ void RendererGL::setCurveObjects()
 
    VelocityCurveObject.setObject( GL_LINE_STRIP, {} );
    VelocityCurveObject.setDiffuseReflectionColor( { 0.9f, 0.1f, 0.1f, 1.0f } );
+
+   MovingObject.setObject( GL_POINTS, {} );
+   MovingObject.setDiffuseReflectionColor( { 1.0f, 0.0f, 0.0f, 1.0f } );
 }
 
 void RendererGL::drawAxisObject()
@@ -356,6 +462,40 @@ void RendererGL::drawCurve(ObjectGL& curve)
    glLineWidth( 1.0f );
 }
 
+void RendererGL::drawMovingPoint()
+{
+   static int time = 0;
+   if (time >= TotalAnimationFrameNum) return;
+
+   switch(MoveType) {
+      case UNIFORM:
+         MovingObject.updateDataBuffer( { UniformVelocityCurve[time] } );
+         break;
+      case VARIABLE:
+         break;
+      case NONE:
+      default:
+         return;
+   }
+
+   glUseProgram( ObjectShader.ShaderProgram );
+   glPointSize( 10.0f );
+
+   mat4 to_world = mat4(1.0f);
+   mat4 model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * to_world;
+   glUniformMatrix4fv( ObjectShader.Location.World, 1, GL_FALSE, &to_world[0][0] );
+   glUniformMatrix4fv( ObjectShader.Location.View, 1, GL_FALSE, &MainCamera.ViewMatrix[0][0] );
+   glUniformMatrix4fv( ObjectShader.Location.Projection, 1, GL_FALSE, &MainCamera.ProjectionMatrix[0][0] );
+   glUniformMatrix4fv( ObjectShader.Location.ModelViewProjection, 1, GL_FALSE, &model_view_projection[0][0] );
+   MovingObject.transferUniformsToShader( ObjectShader );
+
+   glBindVertexArray( MovingObject.ObjVAO );
+   glDrawArrays( MovingObject.DrawMode, 0, MovingObject.VerticesCount );
+   glPointSize( 1.0f );
+
+   time++;
+}
+
 void RendererGL::drawMainCurve()
 {
    glViewport( 0, 0, 1280, 1080 );
@@ -363,6 +503,11 @@ void RendererGL::drawMainCurve()
    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
    drawAxisObject();
+
+   if (!PositionMode && !PositionCurve.empty()) {
+      drawCurve( PositionCurveObject );
+      drawMovingPoint();
+   }
 }
 
 void RendererGL::drawPositionCurve()
@@ -401,6 +546,10 @@ void RendererGL::drawVelocityCurve()
       VelocityObject.updateDataBuffer( VelocityControlPoints );
    }
    drawControlPoints( VelocityObject );
+
+   if (!VelocityMode && !VelocityCurve.empty()) {
+      drawCurve( VelocityCurveObject );
+   }
 
    glDisable( GL_SCISSOR_TEST );
 }

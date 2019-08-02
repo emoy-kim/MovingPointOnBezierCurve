@@ -16,10 +16,13 @@
 
 class RendererGL
 {
+   enum MOVE_TYPE{ NONE=0, UNIFORM, VARIABLE };
+
    static RendererGL* Renderer;
    GLFWwindow* Window;
 
    bool PositionMode, VelocityMode;
+   int MoveType;
    int TotalPositionCurvePointNum;
    int TotalVelocityCurvePointNum;
    int TotalAnimationFrameNum;
@@ -32,6 +35,7 @@ class RendererGL
    ObjectGL AxisObject;
    ObjectGL PositionObject, VelocityObject;
    ObjectGL PositionCurveObject, VelocityCurveObject;
+   ObjectGL MovingObject;
  
    void registerCallbacks() const;
    void initialize();
@@ -39,7 +43,12 @@ class RendererGL
    void printOpenGLInformation() const;
 
    void getPointOnPositionBezierCurve(vec3& point, const float& t);
+   float getDeltaLength(const float& t);
+   float getCurveLengthFromZeroTo(const float& t);
+   float getInverseCurveLength(const float& length);
    void createPositionCurve();
+   void getPointOnVelocityBezierCurve(vec3& point, const float& t);
+   void createVelocityCurve();
    void clearCurve();
 
    void error(int error, const char* description) const;
@@ -60,6 +69,7 @@ class RendererGL
    void drawAxisObject();
    void drawControlPoints(ObjectGL& control_points);
    void drawCurve(ObjectGL& curve);
+   void drawMovingPoint();
    void drawMainCurve();
    void drawPositionCurve();
    void drawVelocityCurve();

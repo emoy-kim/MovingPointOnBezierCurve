@@ -417,7 +417,6 @@ void ObjectGL::updateDataBuffer(const vector<vec3>& data)
       DataBuffer.push_back( data[i].y );
       DataBuffer.push_back( data[i].z );
       VerticesCount++;
-      cout << data[i].x << " " << data[i].y << " " << data[i].z << endl;
    }
    glBindBuffer( GL_ARRAY_BUFFER, ObjVBO );
    glBufferData( GL_ARRAY_BUFFER, sizeof(GLfloat) * DataBuffer.size(), DataBuffer.data(), GL_DYNAMIC_DRAW );
