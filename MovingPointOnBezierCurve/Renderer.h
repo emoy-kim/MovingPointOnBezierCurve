@@ -20,8 +20,12 @@ class RendererGL
    GLFWwindow* Window;
 
    bool PositionMode, VelocityMode;
+   int TotalPositionCurvePointNum;
+   int TotalVelocityCurvePointNum;
+   int TotalAnimationFrameNum;
    vector<vec3> PositionControlPoints, VelocityControlPoints;
    vector<vec3> PositionCurve, VelocityCurve;
+   vector<vec3> UniformVelocityCurve, VariableVelocityCurve;
 
    CameraGL MainCamera;
    ShaderGL ObjectShader;
@@ -33,6 +37,10 @@ class RendererGL
    void initialize();
 
    void printOpenGLInformation() const;
+
+   void getPointOnPositionBezierCurve(vec3& point, const float& t);
+   void createPositionCurve();
+   void clearCurve();
 
    void error(int error, const char* description) const;
    void cleanup(GLFWwindow* window);
@@ -51,6 +59,7 @@ class RendererGL
    void setCurveObjects();
    void drawAxisObject();
    void drawControlPoints(ObjectGL& control_points);
+   void drawCurve(ObjectGL& curve);
    void drawMainCurve();
    void drawPositionCurve();
    void drawVelocityCurve();

@@ -1,7 +1,9 @@
 #include "Renderer.h"
 
 RendererGL* RendererGL::Renderer = nullptr;
-RendererGL::RendererGL() : Window( nullptr ), PositionMode( false ), VelocityMode( false )
+RendererGL::RendererGL() : 
+   Window( nullptr ), PositionMode( false ), VelocityMode( false ), TotalPositionCurvePointNum( 201 ),
+   TotalVelocityCurvePointNum( 101 ), TotalAnimationFrameNum( 301 )
 {
    Renderer = this;
 
@@ -86,6 +88,29 @@ void RendererGL::cleanupWrapper(GLFWwindow* window)
    Renderer->cleanup( window );
 }
 
+void RendererGL::clearCurve()
+{
+   double x_pos, y_pos;
+   glfwGetCursorPos( Window, &x_pos, &y_pos );
+   const auto x = static_cast<float>(x_pos);
+   const auto y = static_cast<float>(y_pos);
+   
+   if (1280.0f <= x && y <= 540.0f) {
+      PositionMode = false;
+      PositionControlPoints.clear();
+      PositionCurve.clear();
+      UniformVelocityCurve.clear();
+      cout << "Clear the position curve." << endl;
+   }
+   else if (1280.0f <= x && 540.0f < y) {
+      VelocityMode = false;
+      VelocityControlPoints.clear();
+      VelocityCurve.clear();
+      VariableVelocityCurve.clear();
+      cout << "Clear the velocity curve." << endl;
+   }
+}
+
 void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
    if (action != GLFW_PRESS) return;
@@ -94,24 +119,19 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
       case GLFW_KEY_P:
          PositionMode = true;
          VelocityMode = false;
+         PositionCurve.resize( TotalPositionCurvePointNum );
+         UniformVelocityCurve.resize( TotalAnimationFrameNum );
          cout << "Select 4 points for the position curve." << endl;
          break;
       case GLFW_KEY_V:
          PositionMode = false;
          VelocityMode = true;
+         VelocityCurve.resize( TotalVelocityCurvePointNum );
+         VariableVelocityCurve.resize( TotalAnimationFrameNum );
          cout << "Select 2 points for the velocity curve." << endl;
          break;
       case GLFW_KEY_C:
-         if (PositionMode) {
-            PositionMode = false;
-            PositionControlPoints.clear();
-            cout << "Clear the position curve." << endl;
-         }
-         if (VelocityMode) {
-            VelocityMode = false;
-            VelocityControlPoints.clear();
-            cout << "Clear the velocity curve." << endl;
-         }
+         clearCurve();
          break;
       case GLFW_KEY_Q:
       case GLFW_KEY_ESCAPE:
@@ -140,6 +160,34 @@ void RendererGL::cursorWrapper(GLFWwindow* window, double xpos, double ypos)
    Renderer->cursor( window, xpos, ypos );
 }
 
+void RendererGL::getPointOnPositionBezierCurve(vec3& point, const float& t)
+{
+   const float t2 = t * t;
+   const float t3 = t2 * t;
+   const float one_minus_t = 1.0f - t;
+
+   const float b0 = one_minus_t * one_minus_t * one_minus_t / 6.0f;
+   const float b1 = (3 * t3 - 6 * t2 + 4) / 6.0f;
+   const float b2 = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6.0f;
+   const float b3 = t3 / 6.0f;
+
+   point = 
+      b0 * PositionControlPoints[0] + b1 * PositionControlPoints[1] + 
+      b2 * PositionControlPoints[2] + b3 * PositionControlPoints[3];
+}
+
+void RendererGL::createPositionCurve()
+{
+   for (int i = 0; i != TotalPositionCurvePointNum; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(TotalPositionCurvePointNum - 1);
+      getPointOnPositionBezierCurve( PositionCurve[i], t );
+   }
+   PositionCurveObject.updateDataBuffer( PositionCurve );
+
+
+
+}
+
 void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
 {
    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
@@ -150,6 +198,10 @@ void RendererGL::mouse(GLFWwindow* window, int button, int action, int mods)
       
       if (PositionMode && PositionControlPoints.size() <= 3 && 1280.0f <= x && y <= 540.0f) {
          PositionControlPoints.emplace_back( (x - 1280.0f) * 3.0f, (540.0f - y) * 2.0f, 0.0f );
+         if (PositionControlPoints.size() == 4) {
+            PositionMode = false;
+            createPositionCurve();
+         }
       }
       else if (VelocityMode && VelocityControlPoints.size() <= 3 && 1280.0f <= x && 540.0f < y) {
          if (VelocityControlPoints.empty()) {
@@ -228,6 +280,12 @@ void RendererGL::setCurveObjects()
 
    VelocityObject.setObject( GL_LINE_STRIP, {} );
    VelocityObject.setDiffuseReflectionColor( { 0.9f, 0.8f, 0.1f, 1.0f } );
+
+   PositionCurveObject.setObject( GL_LINE_STRIP, {} );
+   PositionCurveObject.setDiffuseReflectionColor( { 0.9f, 0.1f, 0.1f, 1.0f } );
+
+   VelocityCurveObject.setObject( GL_LINE_STRIP, {} );
+   VelocityCurveObject.setDiffuseReflectionColor( { 0.9f, 0.1f, 0.1f, 1.0f } );
 }
 
 void RendererGL::drawAxisObject()
@@ -280,6 +338,24 @@ void RendererGL::drawControlPoints(ObjectGL& control_points)
    glPointSize( 1.0f );
 }
 
+void RendererGL::drawCurve(ObjectGL& curve)
+{
+   glUseProgram( ObjectShader.ShaderProgram );
+   glLineWidth( 3.0f );
+
+   mat4 to_world = mat4(1.0f);
+   mat4 model_view_projection = MainCamera.ProjectionMatrix * MainCamera.ViewMatrix * to_world;
+   glUniformMatrix4fv( ObjectShader.Location.World, 1, GL_FALSE, &to_world[0][0] );
+   glUniformMatrix4fv( ObjectShader.Location.View, 1, GL_FALSE, &MainCamera.ViewMatrix[0][0] );
+   glUniformMatrix4fv( ObjectShader.Location.Projection, 1, GL_FALSE, &MainCamera.ProjectionMatrix[0][0] );
+   glUniformMatrix4fv( ObjectShader.Location.ModelViewProjection, 1, GL_FALSE, &model_view_projection[0][0] );
+   curve.transferUniformsToShader( ObjectShader );
+
+   glBindVertexArray( curve.ObjVAO );
+   glDrawArrays( curve.DrawMode, 0, curve.VerticesCount );
+   glLineWidth( 1.0f );
+}
+
 void RendererGL::drawMainCurve()
 {
    glViewport( 0, 0, 1280, 1080 );
@@ -303,6 +379,10 @@ void RendererGL::drawPositionCurve()
       PositionObject.updateDataBuffer( PositionControlPoints );
    }
    drawControlPoints( PositionObject );
+
+   if (!PositionMode && !PositionCurve.empty()) {
+      drawCurve( PositionCurveObject );
+   }
 
    glDisable( GL_SCISSOR_TEST );
 }
