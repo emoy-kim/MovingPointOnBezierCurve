@@ -16,6 +16,7 @@
 #include <fstream>
 #include <filesystem>
 #include <unordered_map>
+#include <functional>
 
 using namespace std;
 using namespace cv;
