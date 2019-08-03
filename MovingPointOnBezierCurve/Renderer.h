@@ -23,6 +23,7 @@ class RendererGL
 
    bool PositionMode, VelocityMode;
    int MoveType;
+   int FrameIndex;
    int TotalPositionCurvePointNum;
    int TotalVelocityCurvePointNum;
    int TotalAnimationFrameNum;
@@ -47,7 +48,8 @@ class RendererGL
    float getCurveLengthFromZeroTo(const float& t);
    float getInverseCurveLength(const float& length);
    void createPositionCurve();
-   void getPointOnVelocityBezierCurve(vec3& point, const float& t);
+   vec3 getPointOnVelocityBezierCurve(const float& t);
+   float getInverseVelocity(const float& velocity) ;
    void createVelocityCurve();
    void clearCurve();
 
