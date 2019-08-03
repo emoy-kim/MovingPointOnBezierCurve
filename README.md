@@ -1,5 +1,11 @@
 # MovingPointOnBezierCurve
 
+
+![movingpoint](https://user-images.githubusercontent.com/17864157/62411453-d97ad480-b62d-11e9-9271-1e67bcec5697.gif)
+
+
+
+
 ## Test Environment
   * Windows 10
   * Visual Studio 2017
