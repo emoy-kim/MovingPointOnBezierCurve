@@ -20,15 +20,6 @@ The second one shows the point moving at an variable speed based on the velocity
 
 
 
-## Test Environment
-  * Windows 10
-  * Visual Studio 2017
-  * Surface Book 2
-  
-## Library Dependencies
-  * OpenCV (not used)
-  * OpenGL
-
 ## Keyboard Commands
   * **p key**: activate the position curve drawing mode (*top-right graph*)
   * **v key**: activate the velocity curve drawing mode (*bottom-right graph*)
